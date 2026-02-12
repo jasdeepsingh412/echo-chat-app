@@ -56,7 +56,26 @@ SUPABASE_ANON_KEY=your_key
 
 ## 📸 Screenshots
 
-(Add screenshots here later)
+### 🔐 Authentication
+<p align="center">
+  <img src="assets/screenshots/ss2.jpg" width="250"/>
+  <img src="assets/screenshots/ss1.jpg" width="250"/>
+</p>
+
+### 💬 Chat List
+<p align="center">
+  <img src="assets/screenshots/ss6.jpg" width="250"/>
+</p>
+
+### 📩 Chat Screen (Text + Image)
+<p align="center">
+  <img src="assets/screenshots/ss4.jpg" width="250"/>
+</p>
+
+### ➕ Start New Chat
+<p align="center">
+  <img src="assets/screenshots/ss3.jpg" width="250"/>
+</p>
 
 ---
 
