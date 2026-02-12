@@ -6,6 +6,38 @@ It combines Firebase for authentication and messaging with Supabase Storage for 
 
 ---
 
+# 🧠 AI Integration
+
+Echo AI is triggered when chatting with echo_ai.
+
+Flow:
+
+User message stored in Firestore
+
+Temporary typing message added
+
+Last 10 chat messages sent to Groq API
+
+AI response stored back in Firestore
+
+Chat metadata updated
+
+Model used:
+
+llama-3.1-8b-instant via Groq
+
+This demonstrates:
+
+LLM integration in Flutter
+
+Conversation history handling
+
+System + user role formatting
+
+Error fallback logic
+
+---
+
 ## 🚀 Features
 
 - Firebase Authentication
@@ -49,8 +81,10 @@ lib/
 
 Create a `.env` file in root:
 
+GROQ_API_KEY=your_groq_key
 SUPABASE_URL=your_url
 SUPABASE_ANON_KEY=your_key
+
 
 ---
 
