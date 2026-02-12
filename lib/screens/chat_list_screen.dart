@@ -3,326 +3,343 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'chat_screen.dart';
 
-class ChatListScreen extends StatelessWidget {
+class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
   @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _ensureEchoAIConversation();
+  }
+
+  Future<void> _showDeleteDialog({required String chatId}) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          "Delete chat?",
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+          ),
+        ),
+        content: const Text(
+          "This will delete all messages in this chat.",
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              "CANCEL",
+              style: TextStyle(
+                color: Colors.blue.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              "DELETE",
+              style: TextStyle(
+                color: Colors.red.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      await _deleteConversation(chatId);
+    }
+  }
+
+  Future<void> _deleteConversation(String chatId) async {
+    final firestore = FirebaseFirestore.instance;
+    final conversationRef = firestore.collection('conversations').doc(chatId);
+
+    final messagesSnapshot =
+    await conversationRef.collection('messages').get();
+
+    final batch = firestore.batch();
+
+    for (var doc in messagesSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    batch.delete(conversationRef);
+
+    await batch.commit();
+  }
+
+  Future<void> _ensureEchoAIConversation() async {
+    final currentUid = FirebaseAuth.instance.currentUser!.uid;
+    final ids = [currentUid, 'echo_ai'];
+    ids.sort();
+    final chatId = ids.join('_');
+
+    final conversationRef =
+    FirebaseFirestore.instance.collection('conversations').doc(chatId);
+
+    final doc = await conversationRef.get();
+
+    if (!doc.exists) {
+      await conversationRef.set({
+        'participants': [currentUid, 'echo_ai'],
+        'lastMessage': 'Start chatting with Echo AI 🤖',
+        'lastTimestamp': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Get current logged-in user's UI
     final currentUid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // =========================
-          // MODERN SLIVER APP BAR
-          // =========================
-          SliverAppBar(
-            expandedHeight: 120,
-            floating: false,
-            pinned: true,
-            automaticallyImplyLeading: false,
-            flexibleSpace: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.blue.shade700,
-                    Colors.blue.shade500,
-                    Colors.cyan.shade400,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: FlexibleSpaceBar(
-                title: FutureBuilder<DocumentSnapshot>(
-                  future: FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(currentUid)
-                      .get(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Text(
-                        "Chats",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    }
-
-                    final userData =
-                    snapshot.data!.data() as Map<String, dynamic>?;
-                    final username = userData?['username'] ?? '';
-
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Messages",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (username.isNotEmpty)
-                          Text(
-                            username,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-                titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-              ),
-            ),
-            actions: [
-              IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.search,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.logout_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-                onPressed: () async {
-                  final shouldLogout = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      title: const Text(
-                        'Logout',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      content: const Text('Are you sure you want to logout?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade600,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text('Logout',
-                          style: TextStyle(
-                            color: Colors.white
-                          ),),
-                        ),
-                      ],
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.blue.shade700,
+        elevation: 0,
+        title: const Text(
+          "Chats",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.white, size: 24),
+            onPressed: () {},
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) async {
+              if (value == 'logout') {
+                final shouldLogout = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  );
+                    title: const Text(
+                      'Log out?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                      ),
+                    ),
+                    content: const Text(
+                      "You'll need to sign in again to use this app.",
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(
+                          "CANCEL",
+                          style: TextStyle(
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(
+                          "LOG OUT",
+                          style: TextStyle(
+                            color: Colors.red.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
 
-                  if (shouldLogout == true) {
-                    await FirebaseAuth.instance.signOut();
-                  }
-                },
+                if (shouldLogout == true) {
+                  await FirebaseAuth.instance.signOut();
+                }
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'new_group',
+                child: Text('New group'),
               ),
-              const SizedBox(width: 8),
+              const PopupMenuItem(
+                value: 'new_broadcast',
+                child: Text('New broadcast'),
+              ),
+              const PopupMenuItem(
+                value: 'starred',
+                child: Text('Starred messages'),
+              ),
+              const PopupMenuItem(
+                value: 'settings',
+                child: Text('Settings'),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Text('Log out'),
+              ),
             ],
           ),
-
-          // =========================
-          // CHAT LIST
-          // =========================
-          SliverToBoxAdapter(
-            child: StreamBuilder<QuerySnapshot>(
-              // 🔥 Listen to conversations where I am a participant
-              stream: FirebaseFirestore.instance
-                  .collection('conversations')
-                  .where(
-                'participants',
-                arrayContains: currentUid,
-              )
-                  .orderBy('lastTimestamp', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  print("Firestore error: ${snapshot.error}");
-                  return Container(
-                    height: MediaQuery.of(context).size.height * 0.6,
-                    alignment: Alignment.center,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: Colors.red.shade300,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Error: ${snapshot.error}",
-                          style: TextStyle(color: Colors.grey.shade600),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // While loading
-                if (!snapshot.hasData) {
-                  return Container(
-                    height: MediaQuery.of(context).size.height * 0.6,
-                    alignment: Alignment.center,
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.blue.shade600,
-                      ),
-                    ),
-                  );
-                }
-
-                final conversations = snapshot.data!.docs;
-
-                // If no conversations exist
-                if (conversations.isEmpty) {
-                  return Container(
-                    height: MediaQuery.of(context).size.height * 0.6,
-                    alignment: Alignment.center,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 72,
-                            color: Colors.blue.shade300,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          "No conversations yet",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Tap the + button to start chatting",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: conversations.length,
-                  separatorBuilder: (context, index) => Divider(
-                    height: 1,
-                    indent: 88,
-                    color: Colors.grey.shade200,
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('conversations')
+            .where('participants', arrayContains: currentUid)
+            .orderBy('lastTimestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red.shade400,
                   ),
-                  itemBuilder: (context, index) {
-                    final conversation =
-                    conversations[index].data() as Map<String, dynamic>;
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Something went wrong",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
 
-                    final participants =
-                    List<String>.from(conversation['participants']);
+          if (!snapshot.hasData) {
+            return Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Colors.blue.shade700,
+                ),
+              ),
+            );
+          }
 
-                    participants.remove(currentUid);
-                    final otherUserUid = participants.first;
+          final conversations = snapshot.data!.docs;
 
-                    final lastMessage = conversation['lastMessage'] ?? '';
-                    final timestamp =
-                    conversation['lastTimestamp'] as Timestamp?;
+          if (conversations.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 80,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    "No chats yet",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Tap the button below to start chatting",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
 
-                    String timeString = '';
-                    String dateLabel = '';
+          return ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: conversations.length,
+            itemBuilder: (context, index) {
+              final conversation =
+              conversations[index].data() as Map<String, dynamic>;
 
-                    if (timestamp != null) {
-                      final date = timestamp.toDate();
-                      final now = DateTime.now();
-                      final difference = now.difference(date);
+              final participants = List<String>.from(
+                conversation['participants'],
+              );
 
-                      if (difference.inDays == 0) {
-                        timeString =
-                        "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
-                      } else if (difference.inDays == 1) {
-                        dateLabel = "Yesterday";
-                      } else if (difference.inDays < 7) {
-                        const days = [
-                          'Mon',
-                          'Tue',
-                          'Wed',
-                          'Thu',
-                          'Fri',
-                          'Sat',
-                          'Sun'
-                        ];
-                        dateLabel = days[date.weekday - 1];
-                      } else {
-                        dateLabel =
-                        "${date.day}/${date.month}/${date.year.toString().substring(2)}";
-                      }
-                    }
+              participants.remove(currentUid);
+              final otherUserUid = participants.first;
 
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(otherUserUid)
-                          .get(),
-                      builder: (context, userSnapshot) {
-                        if (!userSnapshot.hasData) {
-                          return const SizedBox();
-                        }
+              final lastMessage = conversation['lastMessage'] ?? '';
+              final timestamp = conversation['lastTimestamp'] as Timestamp?;
 
-                        final userData =
-                        userSnapshot.data!.data() as Map<String, dynamic>;
-                        final otherUsername = userData['username'] ?? 'Unknown';
+              String timeString = '';
 
-                        return InkWell(
+              if (timestamp != null) {
+                final date = timestamp.toDate();
+                final now = DateTime.now();
+                final difference = now.difference(date);
+
+                if (difference.inDays == 0) {
+                  timeString =
+                  "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+                } else if (difference.inDays == 1) {
+                  timeString = "Yesterday";
+                } else if (difference.inDays < 7) {
+                  const days = [
+                    'Monday',
+                    'Tuesday',
+                    'Wednesday',
+                    'Thursday',
+                    'Friday',
+                    'Saturday',
+                    'Sunday',
+                  ];
+                  timeString = days[date.weekday - 1];
+                } else {
+                  timeString =
+                  "${date.day}/${date.month}/${date.year.toString().substring(2)}";
+                }
+              }
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(otherUserUid)
+                    .get(),
+                builder: (context, userSnapshot) {
+                  if (!userSnapshot.hasData) {
+                    return const SizedBox();
+                  }
+
+                  final userData =
+                  userSnapshot.data!.data() as Map<String, dynamic>;
+                  final otherUsername = userData['username'] ?? 'Unknown';
+
+                  return Column(
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
                           onTap: () {
                             Navigator.push(
                               context,
@@ -334,58 +351,31 @@ class ChatListScreen extends StatelessWidget {
                               ),
                             );
                           },
-                          child: Container(
+                          onLongPress: () {
+                            _showDeleteDialog(chatId: conversations[index].id);
+                          },
+                          child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 12,
                             ),
                             child: Row(
                               children: [
-                                // Avatar with online indicator
-                                Stack(
-                                  children: [
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.blue.shade100,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: CircleAvatar(
-                                        radius: 28,
-                                        backgroundColor: Colors.blue.shade50,
-                                        child: Text(
-                                          otherUsername[0].toUpperCase(),
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.blue.shade700,
-                                          ),
-                                        ),
-                                      ),
+                                CircleAvatar(
+                                  radius: 28,
+                                  backgroundColor: Colors.blue.shade100,
+                                  child: Text(
+                                    otherUsername.isNotEmpty
+                                        ? otherUsername[0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade700,
                                     ),
-                                    Positioned(
-                                      right: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        width: 16,
-                                        height: 16,
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.shade400,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 2,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                                 const SizedBox(width: 16),
-
-                                // Chat info
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -397,22 +387,20 @@ class ChatListScreen extends StatelessWidget {
                                             child: Text(
                                               otherUsername,
                                               style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: 0.2,
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.black87,
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
+                                          const SizedBox(width: 8),
                                           Text(
-                                            timeString.isNotEmpty
-                                                ? timeString
-                                                : dateLabel,
+                                            timeString,
                                             style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade500,
-                                              fontWeight: FontWeight.w500,
+                                              fontSize: 13,
+                                              color: Colors.grey.shade600,
                                             ),
                                           ),
                                         ],
@@ -426,31 +414,11 @@ class ChatListScreen extends StatelessWidget {
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
-                                                fontSize: 14,
+                                                fontSize: 15,
                                                 color: Colors.grey.shade600,
-                                                height: 1.3,
                                               ),
                                             ),
                                           ),
-                                          // Unread badge (optional - can be implemented)
-                                          // Container(
-                                          //   padding: const EdgeInsets.symmetric(
-                                          //     horizontal: 8,
-                                          //     vertical: 2,
-                                          //   ),
-                                          //   decoration: BoxDecoration(
-                                          //     color: Colors.blue.shade600,
-                                          //     borderRadius: BorderRadius.circular(12),
-                                          //   ),
-                                          //   child: const Text(
-                                          //     '3',
-                                          //     style: TextStyle(
-                                          //       color: Colors.white,
-                                          //       fontSize: 11,
-                                          //       fontWeight: FontWeight.bold,
-                                          //     ),
-                                          //   ),
-                                          // ),
                                         ],
                                       ),
                                     ],
@@ -459,61 +427,38 @@ class ChatListScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+                        ),
+                      ),
+                      if (index < conversations.length - 1)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 76),
+                          child: Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Colors.grey.shade200,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
-
-      // =========================
-      // FLOATING ACTION BUTTON
-      // =========================
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [
-              Colors.blue.shade600,
-              Colors.blue.shade500,
-            ],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blue.shade300.withOpacity(0.5),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: FloatingActionButton.extended(
-          onPressed: () {
-            _showStartChatDialog(context);
-          },
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          icon: const Icon(Icons.add, size: 22, color: Colors.white,),
-          label: const Text(
-            'New Chat',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold
-              ,
-              fontSize: 15,
-            ),
-          ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showStartChatDialog(context),
+        backgroundColor: Colors.blue.shade700,
+        elevation: 4,
+        child: const Icon(
+          Icons.chat,
+          color: Colors.white,
+          size: 26,
         ),
       ),
     );
   }
 
-  // =========================
-  // START CHAT DIALOG
-  // =========================
   void _showStartChatDialog(BuildContext context) {
     final controller = TextEditingController();
 
@@ -522,159 +467,184 @@ class ChatListScreen extends StatelessWidget {
       builder: (_) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
           ),
-          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.person_add_rounded,
-                  color: Colors.blue.shade600,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                "Start New Chat",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+          title: const Text(
+            "Select contact",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 8),
-              Text(
-                "Enter the username of the person you want to chat with",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ChatScreen(
+                          otherUserUid: 'echo_ai',
+                          otherUserName: 'Echo AI',
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: Colors.blue.shade700,
+                          child: const Icon(
+                            Icons.smart_toy,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Echo AI",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                "AI Assistant",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Colors.grey.shade400,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade300),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 12),
+              const Text(
+                "Or search by username",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
                 ),
-                child: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.none,
-                  decoration: InputDecoration(
-                    hintText: "username",
-                    hintStyle: TextStyle(color: Colors.grey.shade400),
-                    prefixIcon: Icon(
-                      Icons.alternate_email,
-                      color: Colors.grey.shade500,
-                      size: 20,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: false,
+                textCapitalization: TextCapitalization.none,
+                decoration: InputDecoration(
+                  hintText: "Enter username",
+                  hintStyle: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 15,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: Colors.grey,
+                    size: 22,
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
                   ),
                 ),
               ),
             ],
           ),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
               child: Text(
-                "Cancel",
+                "CANCEL",
                 style: TextStyle(
-                  color: Colors.grey.shade600,
+                  color: Colors.blue.shade700,
                   fontWeight: FontWeight.w600,
-                  fontSize: 15,
                 ),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.blue.shade600,
-                    Colors.blue.shade500,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.shade200,
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ElevatedButton(
-                onPressed: () async {
-                  final input = controller.text.trim().toLowerCase();
+            TextButton(
+              onPressed: () async {
+                final input = controller.text.trim().toLowerCase();
 
-                  if (input.isEmpty) return;
+                if (input.isEmpty) return;
 
-                  // Show loading
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => Center(
+                    child: Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
                         child: CircularProgressIndicator(
+                          strokeWidth: 3,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.blue.shade600,
+                            Colors.blue.shade700,
                           ),
                         ),
                       ),
                     ),
-                  );
+                  ),
+                );
 
-                  // Search for user by usernameLowercase
-                  final query = await FirebaseFirestore.instance
-                      .collection('users')
-                      .where('usernameLowercase', isEqualTo: input)
-                      .get();
+                final query = await FirebaseFirestore.instance
+                    .collection('users')
+                    .where('usernameLowercase', isEqualTo: input)
+                    .get();
 
-                  Navigator.pop(context); // Close loading
-                  Navigator.pop(context); // Close dialog
+                Navigator.pop(context);
+                Navigator.pop(context);
 
-                  if (query.docs.isEmpty) {
+                if (query.docs.isEmpty) {
+                  if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Row(
+                        content: const Row(
                           children: [
-                            Icon(
-                              Icons.person_off_outlined,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 12),
-                            const Text("User not found"),
+                            Icon(Icons.person_off, color: Colors.white, size: 20),
+                            SizedBox(width: 12),
+                            Text("User not found"),
                           ],
                         ),
                         backgroundColor: Colors.red.shade600,
@@ -685,41 +655,29 @@ class ChatListScreen extends StatelessWidget {
                         margin: const EdgeInsets.all(16),
                       ),
                     );
-                    return;
                   }
+                  return;
+                }
 
-                  final userDoc = query.docs.first;
-                  final otherUserUid = userDoc.id;
-                  final otherUsername = userDoc['username'];
+                final userDoc = query.docs.first;
+                final otherUserUid = userDoc.id;
+                final otherUsername = userDoc['username'];
 
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ChatScreen(
-                        otherUserUid: otherUserUid,
-                        otherUserName: otherUsername,
-                      ),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      otherUserUid: otherUserUid,
+                      otherUserName: otherUsername,
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  "Start Chat",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    fontSize: 15,
-                  ),
+                );
+              },
+              child: Text(
+                "SEARCH",
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue.shade700,
                 ),
               ),
             ),
